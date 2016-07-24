@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/graphql-go/graphql/language/ast"
-	"github.com/graphql-go/graphql/language/printer"
+	"github.com/dennwc/graphql/language/ast"
+	"github.com/dennwc/graphql/language/printer"
 )
 
 const (
