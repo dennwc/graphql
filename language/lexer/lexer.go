@@ -7,6 +7,7 @@ import (
 
 	"github.com/graphql-go/graphql/gqlerrors"
 	"github.com/graphql-go/graphql/language/source"
+	"strings"
 )
 
 const (
@@ -100,6 +101,8 @@ func Lex(s *source.Source) Lexer {
 	}
 }
 
+var AllowNameRunes = ""
+
 // Reads an alphanumeric + underscore name from the source.
 // [_A-Za-z][_0-9A-Za-z]*
 // position: Points to the byte position in the byte array
@@ -115,7 +118,8 @@ func readName(source *source.Source, position, runePosition int) Token {
 			(code == '_' || // _
 				code >= '0' && code <= '9' || // 0-9
 				code >= 'A' && code <= 'Z' || // A-Z
-				code >= 'a' && code <= 'z') { // a-z
+				code >= 'a' && code <= 'z' || // a-z
+				(AllowNameRunes != "" && strings.ContainsRune(AllowNameRunes, code)) ) {
 			endByte++
 			endRune++
 			continue
