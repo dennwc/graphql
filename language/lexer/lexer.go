@@ -103,6 +103,8 @@ func Lex(s *source.Source) Lexer {
 
 var AllowNameRunes = ""
 
+const disallowAtNameEnd = ",:("
+
 // Reads an alphanumeric + underscore name from the source.
 // [_A-Za-z][_0-9A-Za-z]*
 // position: Points to the byte position in the byte array
@@ -127,7 +129,13 @@ func readName(source *source.Source, position, runePosition int) Token {
 			break
 		}
 	}
-	return makeToken(TokenKind[NAME], runePosition, endRune, string(body[position:endByte]))
+	value := string(body[position:endByte])
+	if AllowNameRunes != "" && len(value) != 0 &&
+		strings.ContainsRune(disallowAtNameEnd, rune(value[len(value)-1])) {
+		endRune--
+		value = value[:len(value)-1]
+	}
+	return makeToken(TokenKind[NAME], runePosition, endRune, value)
 }
 
 // Reads a number token from the source file, either a float
