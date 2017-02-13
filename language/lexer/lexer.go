@@ -443,6 +443,9 @@ func readToken(s *source.Source, fromPosition int) (Token, error) {
 		}
 		return token, nil
 	}
+	if AllowNameRunes != "" && strings.ContainsRune(AllowNameRunes, code) {
+		return readName(s, position, runePosition), nil
+	}
 	description := fmt.Sprintf("Unexpected character %v.", printCharCode(code))
 	return Token{}, gqlerrors.NewSyntaxError(s, runePosition, description)
 }
