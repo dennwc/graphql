@@ -1,6 +1,7 @@
 package graphql_test
 
 import (
+	"reflect"
 	"testing"
 
 	"github.com/dennwc/graphql"
@@ -10,7 +11,6 @@ import (
 	"github.com/dennwc/graphql/language/parser"
 	"github.com/dennwc/graphql/language/source"
 	"github.com/dennwc/graphql/testutil"
-	"reflect"
 )
 
 func expectValid(t *testing.T, schema *graphql.Schema, queryString string) {
@@ -74,19 +74,19 @@ func TestValidator_SupportsFullValidation_ValidatesUsingACustomTypeInfo(t *testi
 
 	expectedErrors := []gqlerrors.FormattedError{
 		{
-			Message: "Cannot query field \"catOrDog\" on type \"QueryRoot\".",
+			Message: `Cannot query field "catOrDog" on type "QueryRoot". Did you mean "catOrDog"?`,
 			Locations: []location.SourceLocation{
 				{Line: 3, Column: 9},
 			},
 		},
 		{
-			Message: "Cannot query field \"furColor\" on type \"Cat\".",
+			Message: `Cannot query field "furColor" on type "Cat". Did you mean "furColor"?`,
 			Locations: []location.SourceLocation{
 				{Line: 5, Column: 13},
 			},
 		},
 		{
-			Message: "Cannot query field \"isHousetrained\" on type \"Dog\".",
+			Message: `Cannot query field "isHousetrained" on type "Dog". Did you mean "isHousetrained"?`,
 			Locations: []location.SourceLocation{
 				{Line: 8, Column: 13},
 			},
