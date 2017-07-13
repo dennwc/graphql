@@ -101,7 +101,7 @@ func Lex(s *source.Source) Lexer {
 	}
 }
 
-var AllowNameRunes = ""
+var AllowNameRunes func(rune) bool
 
 const disallowAtNameEnd = ",:("
 
@@ -121,7 +121,7 @@ func readName(source *source.Source, position, runePosition int) Token {
 				code >= '0' && code <= '9' || // 0-9
 				code >= 'A' && code <= 'Z' || // A-Z
 				code >= 'a' && code <= 'z' || // a-z
-				(AllowNameRunes != "" && strings.ContainsRune(AllowNameRunes, code)) ) {
+				(AllowNameRunes != nil && AllowNameRunes(code)) ) {
 			endByte++
 			endRune++
 			continue
@@ -130,7 +130,7 @@ func readName(source *source.Source, position, runePosition int) Token {
 		}
 	}
 	value := string(body[position:endByte])
-	if AllowNameRunes != "" && len(value) != 0 &&
+	if AllowNameRunes != nil && len(value) != 0 &&
 		strings.ContainsRune(disallowAtNameEnd, rune(value[len(value)-1])) {
 		endRune--
 		value = value[:len(value)-1]
@@ -443,7 +443,7 @@ func readToken(s *source.Source, fromPosition int) (Token, error) {
 		}
 		return token, nil
 	}
-	if AllowNameRunes != "" && strings.ContainsRune(AllowNameRunes, code) {
+	if AllowNameRunes != nil && AllowNameRunes(code) {
 		return readName(s, position, runePosition), nil
 	}
 	description := fmt.Sprintf("Unexpected character %v.", printCharCode(code))
