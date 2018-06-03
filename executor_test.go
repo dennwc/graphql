@@ -1,6 +1,7 @@
 package graphql_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,7 +13,6 @@ import (
 	"github.com/dennwc/graphql/gqlerrors"
 	"github.com/dennwc/graphql/language/location"
 	"github.com/dennwc/graphql/testutil"
-	"golang.org/x/net/context"
 )
 
 func TestExecutesArbitraryCode(t *testing.T) {
@@ -85,7 +85,7 @@ func TestExecutesArbitraryCode(t *testing.T) {
 				"b": "Boring",
 				"c": []interface{}{
 					"Contrived",
-					nil,
+					"",
 					"Confusing",
 				},
 				"deeper": []interface{}{
@@ -1483,6 +1483,56 @@ func TestQuery_ExecutionDoesNotAddErrorsFromFieldResolveFn(t *testing.T) {
 	}
 }
 
+func TestQuery_InputObjectUsesFieldDefaultValueFn(t *testing.T) {
+	inputType := graphql.NewInputObject(graphql.InputObjectConfig{
+		Name: "Input",
+		Fields: graphql.InputObjectConfigFieldMap{
+			"default": &graphql.InputObjectFieldConfig{
+				Type:         graphql.String,
+				DefaultValue: "bar",
+			},
+		},
+	})
+	q := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Query",
+		Fields: graphql.Fields{
+			"a": &graphql.Field{
+				Type: graphql.String,
+				Args: graphql.FieldConfigArgument{
+					"foo": &graphql.ArgumentConfig{
+						Type: graphql.NewNonNull(inputType),
+					},
+				},
+				Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+					val := p.Args["foo"].(map[string]interface{})
+					def, ok := val["default"]
+					if !ok || def == nil {
+						return nil, errors.New("queryError: No 'default' param")
+					}
+					if def.(string) != "bar" {
+						return nil, errors.New("queryError: 'default' param has wrong value")
+					}
+					return "ok", nil
+				},
+			},
+		},
+	})
+	schema, err := graphql.NewSchema(graphql.SchemaConfig{
+		Query: q,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error, got: %v", err)
+	}
+	query := `{ a(foo: {}) }`
+	result := graphql.Do(graphql.Params{
+		Schema:        schema,
+		RequestString: query,
+	})
+	if len(result.Errors) != 0 {
+		t.Fatalf("wrong result, unexpected errors: %+v", result.Errors)
+	}
+}
+
 func TestMutation_ExecutionAddsErrorsFromFieldResolveFn(t *testing.T) {
 	mError := errors.New("mutationError")
 	q := graphql.NewObject(graphql.ObjectConfig{
@@ -1639,6 +1689,70 @@ func TestGraphqlTag(t *testing.T) {
 	if !reflect.DeepEqual(result.Data, expectedData) {
 		t.Fatalf("unexpected result, got: %+v, expected: %+v", expectedData, result.Data)
 	}
+}
+
+func TestFieldResolver(t *testing.T) {
+	typeObjectType := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Type",
+		Fields: graphql.Fields{
+			"fooBar": &graphql.Field{Type: graphql.String},
+		},
+	})
+	var baz = &graphql.Field{
+		Type:        typeObjectType,
+		Description: "typeObjectType",
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			return testCustomResolver{}, nil
+		},
+	}
+	var bazPtr = &graphql.Field{
+		Type:        typeObjectType,
+		Description: "typeObjectType",
+		Resolve: func(p graphql.ResolveParams) (interface{}, error) {
+			return &testCustomResolver{}, nil
+		},
+	}
+	q := graphql.NewObject(graphql.ObjectConfig{
+		Name: "Query",
+		Fields: graphql.Fields{
+			"baz":    baz,
+			"bazPtr": bazPtr,
+		},
+	})
+	schema, err := graphql.NewSchema(graphql.SchemaConfig{
+		Query: q,
+	})
+	if err != nil {
+		t.Fatalf("unexpected error, got: %v", err)
+	}
+	query := "{ baz { fooBar }, bazPtr { fooBar } }"
+	result := graphql.Do(graphql.Params{
+		Schema:        schema,
+		RequestString: query,
+	})
+	if len(result.Errors) != 0 {
+		t.Fatalf("wrong result, unexpected errors: %+v", result.Errors)
+	}
+	expectedData := map[string]interface{}{
+		"baz": map[string]interface{}{
+			"fooBar": "foo bar value",
+		},
+		"bazPtr": map[string]interface{}{
+			"fooBar": "foo bar value",
+		},
+	}
+	if !reflect.DeepEqual(result.Data, expectedData) {
+		t.Fatalf("unexpected result, got: %+v, expected: %+v", result.Data, expectedData)
+	}
+}
+
+type testCustomResolver struct{}
+
+func (r testCustomResolver) Resolve(p graphql.ResolveParams) (interface{}, error) {
+	if p.Info.FieldName == "fooBar" {
+		return "foo bar value", nil
+	}
+	return "", errors.New("invalid field " + p.Info.FieldName)
 }
 
 func TestContextDeadline(t *testing.T) {

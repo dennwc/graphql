@@ -7,11 +7,12 @@ import (
 	"reflect"
 	"strings"
 
+	"sort"
+
 	"github.com/dennwc/graphql/gqlerrors"
 	"github.com/dennwc/graphql/language/ast"
 	"github.com/dennwc/graphql/language/kinds"
 	"github.com/dennwc/graphql/language/printer"
-	"sort"
 )
 
 // Prepares an object map of variableValues of the correct type based on the
@@ -316,44 +317,26 @@ func isValidInputValue(value interface{}, ttype Input) (bool, []string) {
 }
 
 // Returns true if a value is null, undefined, or NaN.
-func isNullish(value interface{}) bool {
-	if value, ok := value.(string); ok {
-		return value == ""
+func isNullish(src interface{}) bool {
+	if src == nil {
+		return true
 	}
-	if value, ok := value.(*string); ok {
-		if value == nil {
+	value := reflect.ValueOf(src)
+	if value.Kind() == reflect.Ptr {
+		value = value.Elem()
+	}
+	switch value.Kind() {
+	case reflect.String:
+		// if src is ptr type and len(string)=0, it returns false
+		if !value.IsValid() {
 			return true
 		}
-		return *value == ""
+	case reflect.Int:
+		return math.IsNaN(float64(value.Int()))
+	case reflect.Float32, reflect.Float64:
+		return math.IsNaN(float64(value.Float()))
 	}
-	if value, ok := value.(int); ok {
-		return math.IsNaN(float64(value))
-	}
-	if value, ok := value.(*int); ok {
-		if value == nil {
-			return true
-		}
-		return math.IsNaN(float64(*value))
-	}
-	if value, ok := value.(float32); ok {
-		return math.IsNaN(float64(value))
-	}
-	if value, ok := value.(*float32); ok {
-		if value == nil {
-			return true
-		}
-		return math.IsNaN(float64(*value))
-	}
-	if value, ok := value.(float64); ok {
-		return math.IsNaN(value)
-	}
-	if value, ok := value.(*float64); ok {
-		if value == nil {
-			return true
-		}
-		return math.IsNaN(*value)
-	}
-	return value == nil
+	return false
 }
 
 /**
@@ -431,10 +414,14 @@ func valueFromAST(valueAST ast.Value, ttype Input, variables map[string]interfac
 		obj := map[string]interface{}{}
 		for fieldName, field := range ttype.Fields() {
 			fieldAST, ok := fieldASTs[fieldName]
+			fieldValue := field.DefaultValue
 			if !ok || fieldAST == nil {
-				continue
+				if fieldValue == nil {
+					continue
+				}
+			} else {
+				fieldValue = valueFromAST(fieldAST.Value, field.Type, variables)
 			}
-			fieldValue := valueFromAST(fieldAST.Value, field.Type, variables)
 			if isNullish(fieldValue) {
 				fieldValue = field.DefaultValue
 			}
@@ -463,6 +450,13 @@ func valueFromAST(valueAST ast.Value, ttype Input, variables map[string]interfac
 func invariant(condition bool, message string) error {
 	if !condition {
 		return gqlerrors.NewFormattedError(message)
+	}
+	return nil
+}
+
+func invariantf(condition bool, format string, a ...interface{}) error {
+	if !condition {
+		return gqlerrors.NewFormattedError(fmt.Sprintf(format, a...))
 	}
 	return nil
 }

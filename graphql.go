@@ -1,10 +1,11 @@
 package graphql
 
 import (
+	"context"
+
 	"github.com/dennwc/graphql/gqlerrors"
 	"github.com/dennwc/graphql/language/parser"
 	"github.com/dennwc/graphql/language/source"
-	"golang.org/x/net/context"
 )
 
 type Params struct {

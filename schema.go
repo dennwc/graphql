@@ -50,8 +50,7 @@ func NewSchema(config SchemaConfig) (Schema, error) {
 
 	schema := Schema{}
 
-	err = invariant(config.Query != nil, "Schema query must be Object Type but got: nil.")
-	if err != nil {
+	if err = invariant(config.Query != nil, "Schema query must be Object Type but got: nil."); err != nil {
 		return schema, err
 	}
 
@@ -104,8 +103,7 @@ func NewSchema(config SchemaConfig) (Schema, error) {
 		if ttype.Error() != nil {
 			return schema, ttype.Error()
 		}
-		typeMap, err = typeMapReducer(&schema, typeMap, ttype)
-		if err != nil {
+		if typeMap, err = typeMapReducer(&schema, typeMap, ttype); err != nil {
 			return schema, err
 		}
 	}
@@ -144,6 +142,57 @@ func NewSchema(config SchemaConfig) (Schema, error) {
 	return schema, nil
 }
 
+//Added Check implementation of interfaces at runtime..
+//Add Implementations at Runtime..
+func (gq *Schema) AddImplementation() error {
+
+	// Keep track of all implementations by interface name.
+	if gq.implementations == nil {
+		gq.implementations = map[string][]*Object{}
+	}
+	for _, ttype := range gq.typeMap {
+		if ttype, ok := ttype.(*Object); ok {
+			for _, iface := range ttype.Interfaces() {
+				impls, ok := gq.implementations[iface.Name()]
+				if impls == nil || !ok {
+					impls = []*Object{}
+				}
+				impls = append(impls, ttype)
+				gq.implementations[iface.Name()] = impls
+			}
+		}
+	}
+
+	// Enforce correct interface implementations
+	for _, ttype := range gq.typeMap {
+		if ttype, ok := ttype.(*Object); ok {
+			for _, iface := range ttype.Interfaces() {
+				err := assertObjectImplementsInterface(gq, ttype, iface)
+				if err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+//Edited. To check add Types at RunTime..
+//Append Runtime schema to typeMap
+func (gq *Schema) AppendType(objectType Type) error {
+	if objectType.Error() != nil {
+		return objectType.Error()
+	}
+	var err error
+	gq.typeMap, err = typeMapReducer(gq, gq.typeMap, objectType)
+	if err != nil {
+		return err
+	}
+	//Now Add interface implementation..
+	return gq.AddImplementation()
+}
+
 func (gq *Schema) QueryType() *Object {
 	return gq.queryType
 }
@@ -178,10 +227,10 @@ func (gq *Schema) Type(name string) Type {
 }
 
 func (gq *Schema) PossibleTypes(abstractType Abstract) []*Object {
-	if abstractType, ok := abstractType.(*Union); ok {
+	switch abstractType := abstractType.(type) {
+	case *Union:
 		return abstractType.Types()
-	}
-	if abstractType, ok := abstractType.(*Interface); ok {
+	case *Interface:
 		if impls, ok := gq.implementations[abstractType.Name()]; ok {
 			return impls
 		}
@@ -209,12 +258,15 @@ func (gq *Schema) IsPossibleType(abstractType Abstract, possibleType *Object) bo
 	}
 	return false
 }
+
+// map-reduce
 func typeMapReducer(schema *Schema, typeMap TypeMap, objectType Type) (TypeMap, error) {
 	var err error
 	if objectType == nil || objectType.Name() == "" {
 		return typeMap, nil
 	}
 
+	// first:
 	switch objectType := objectType.(type) {
 	case *List:
 		if objectType.OfType != nil {
@@ -231,47 +283,25 @@ func typeMapReducer(schema *Schema, typeMap TypeMap, objectType Type) (TypeMap, 
 	}
 
 	if mappedObjectType, ok := typeMap[objectType.Name()]; ok {
-		err := invariant(
+		err = invariantf(
 			mappedObjectType == objectType,
-			fmt.Sprintf(`Schema must contain unique named types but contains multiple types named "%v".`, objectType.Name()),
-		)
-		if err != nil {
-			return typeMap, err
-		}
+			`Schema must contain unique named types but contains multiple types named "%v".`, objectType.Name())
 		return typeMap, err
 	}
-	if objectType.Name() == "" {
-		return typeMap, nil
-	}
-
 	typeMap[objectType.Name()] = objectType
 
+	// second:
 	switch objectType := objectType.(type) {
-	case *Union:
+	case *Union, *Interface:
 		types := schema.PossibleTypes(objectType)
-		if objectType.err != nil {
-			return typeMap, objectType.err
+		if objectType.Error() != nil {
+			return typeMap, objectType.Error()
 		}
 		for _, innerObjectType := range types {
 			if innerObjectType.err != nil {
 				return typeMap, innerObjectType.err
 			}
-			typeMap, err = typeMapReducer(schema, typeMap, innerObjectType)
-			if err != nil {
-				return typeMap, err
-			}
-		}
-	case *Interface:
-		types := schema.PossibleTypes(objectType)
-		if objectType.err != nil {
-			return typeMap, objectType.err
-		}
-		for _, innerObjectType := range types {
-			if innerObjectType.err != nil {
-				return typeMap, innerObjectType.err
-			}
-			typeMap, err = typeMapReducer(schema, typeMap, innerObjectType)
-			if err != nil {
+			if typeMap, err = typeMapReducer(schema, typeMap, innerObjectType); err != nil {
 				return typeMap, err
 			}
 		}
@@ -284,8 +314,7 @@ func typeMapReducer(schema *Schema, typeMap TypeMap, objectType Type) (TypeMap, 
 			if innerObjectType.err != nil {
 				return typeMap, innerObjectType.err
 			}
-			typeMap, err = typeMapReducer(schema, typeMap, innerObjectType)
-			if err != nil {
+			if typeMap, err = typeMapReducer(schema, typeMap, innerObjectType); err != nil {
 				return typeMap, err
 			}
 		}
@@ -351,11 +380,11 @@ func assertObjectImplementsInterface(schema *Schema, object *Object, iface *Inte
 		ifaceField := ifaceFieldMap[fieldName]
 
 		// Assert interface field exists on object.
-		err := invariant(
+		err := invariantf(
 			objectField != nil,
-			fmt.Sprintf(`"%v" expects field "%v" but "%v" does not `+
-				`provide it.`, iface, fieldName, object),
-		)
+			`"%v" expects field "%v" but "%v" does not `+
+				`provide it.`, iface, fieldName, object)
+
 		if err != nil {
 			return err
 		}

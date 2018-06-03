@@ -3,12 +3,13 @@ package testutil
 import (
 	"testing"
 
+	"reflect"
+
 	"github.com/dennwc/graphql"
 	"github.com/dennwc/graphql/gqlerrors"
 	"github.com/dennwc/graphql/language/location"
 	"github.com/dennwc/graphql/language/parser"
 	"github.com/dennwc/graphql/language/source"
-	"reflect"
 )
 
 var TestSchema *graphql.Schema
