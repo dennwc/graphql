@@ -9,7 +9,6 @@ import (
 
 	"github.com/dennwc/graphql/gqlerrors"
 	"github.com/dennwc/graphql/language/source"
-	"strings"
 )
 
 const (
@@ -147,7 +146,7 @@ func readName(source *source.Source, position, runePosition int) Token {
 				code >= '0' && code <= '9' || // 0-9
 				code >= 'A' && code <= 'Z' || // A-Z
 				code >= 'a' && code <= 'z' || // a-z
-				(AllowNameRunes != nil && AllowNameRunes(code)) ) {
+				(AllowNameRunes != nil && AllowNameRunes(code))) {
 			endByte++
 			endRune++
 			continue
